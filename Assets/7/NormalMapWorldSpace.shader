@@ -70,7 +70,7 @@ Shader "SunQian/NormalMapWorldSpace"
             fixed4 frag (v2f i) : SV_Target
             {
                 fixed3 tangentLightDir = normalize (i.lightDir);
-                fixed3 tangentViewDir = normalize (i.viewDir);
+                fixed3 tangentViewDir = normalize (i.viewDir); //這個值是為了計算高光時會用到
 
                 //根據i.uv.zw中存儲的normal的紋理座標數據，對_BumpMap這張文裡貼圖進行採樣。
                 fixed4 packedNormal = tex2D(_BumpMap, i.uv.zw); 
@@ -82,24 +82,31 @@ Shader "SunQian/NormalMapWorldSpace"
                 tangentNormal.xy = (packedNormal.xy * 2 - 1) * _BumpScale; //乘上BumpScale來計算強度
                 tangentNormal.z = sqrt(1.0 - saturate(dot(tangentNormal.xy, tangentNormal.xy)));
                 */
-                //計算切線空間下的第三個軸的方向(副切線)
-                //saturate函數 : 將結果映射到1~0的範圍中
+                //計算切線空間下的第三個軸的方向(副切線，其實就是法線方向。)
 
                 //如果輸入時BumpMap的類型已被切換為normal map，則呼叫內置宏
                 tangentNormal = UnpackNormal(packedNormal);
                 tangentNormal.xy *= _BumpScale * -1; //乘上BumpScale來計算強度
                 tangentNormal.z = sqrt(1.0 - saturate(dot(tangentNormal.xy, tangentNormal.xy)));
+                //sqrt=平方根，4與-4都是16的平方根。
+                //saturate(x)的作用是如果x取值小于0，则返回值为0。如果x取值大于1，则返回值为1
+                //這裡實際是就是要把tangentNormal.z的值透過數學方法新映射到0-1的範圍內。
+                //也可以直接normalize比較快。
 
 
                 fixed3 albedo = tex2D(_MainTex, i.uv).rgb * _Color.rgb;
                 fixed3 ambient = UNITY_LIGHTMODEL_AMBIENT.xyz * albedo;
 
                 fixed3 diffuse = _LightColor0.rgb * albedo * max(0, dot(tangentNormal, tangentLightDir));
+                //normal種種計算的結果，實際上在此運用於成果中。
+                //漫反射Diffuse颜色 = 直射光颜色 * max(0, cos(光源方向和法线方向夹角)) * 材质自身色彩（纹理对应位置的点的颜色）
                 
                 fixed3 halfDir = normalize(tangentLightDir + tangentViewDir);
-
+                //獲取光照方向與視角方向的一半，即高光產生的向量。
+    
                 fixed3 specular = _LightColor0.rgb * _Specular.rgb * pow(max(0, dot(tangentNormal, halfDir)), _Gloss);
-                
+                //使高光能融入到法線變化內
+
                 return fixed4 (ambient + diffuse + specular, 1.0);
             }
             ENDCG
